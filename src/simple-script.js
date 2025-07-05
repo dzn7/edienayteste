@@ -400,7 +400,7 @@ const copyPixCodeBtn = document.getElementById('copyPixCodeBtn');
 
 // Novos campos para nome e email do comprador online
 const modalBuyerInfoSection = document.getElementById('modal-buyer-info-section');
-const modalBuyerNameInput = document.getElementById('modal-buyer-name');
+// Removido: const modalBuyerNameInput = document.getElementById('modal-buyer-name');
 const modalBuyerEmailInput = document.getElementById('modal-buyer-email');
 
 
@@ -441,15 +441,14 @@ async function initiateOnlinePayment() {
         return;
     }
 
-    // 3. Valida os novos campos de nome e e-mail do comprador online
-    const buyerName = modalBuyerNameInput?.value.trim();
+    // 3. Valida o campo de e-mail do comprador online
+    const customerName = modalCustomerNameInput?.value.trim(); // Usa o nome do campo geral
     const buyerEmail = modalBuyerEmailInput?.value.trim();
 
-    if (!buyerName || !buyerEmail || !isValidEmail(buyerEmail)) {
-        showCustomAlert("Por favor, preencha o nome e um e-mail válido para o pagamento online.", "error");
+    if (!buyerEmail || !isValidEmail(buyerEmail)) {
+        showCustomAlert("Por favor, preencha um e-mail válido para o pagamento online.", "error");
         if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'block'; // Mostra a seção de dados do comprador
-        if (!buyerName) highlightField('modal-buyer-name');
-        if (!buyerEmail || !isValidEmail(buyerEmail)) highlightField('modal-buyer-email');
+        highlightField('modal-buyer-email');
         // Reverte a visibilidade dos elementos
         if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
         if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
@@ -472,7 +471,7 @@ async function initiateOnlinePayment() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    customerName: buyerName, // Usa o nome do comprador online
+                    customerName: customerName, // Usa o nome do campo geral
                     customerEmail: buyerEmail, // Usa o email do comprador online
                     items: cart.map(item => {
                         const product = getProductById(item.productId);
@@ -1317,7 +1316,7 @@ function selectPaymentMethod(method) {
     if (onlinePaymentSection) removeHighlightField('online-payment-section');
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value'); 
-    removeHighlightField('modal-buyer-name');
+    // Removido: removeHighlightField('modal-buyer-name');
     removeHighlightField('modal-buyer-email');
 
     updateTotal();
@@ -1474,8 +1473,7 @@ function clearCart() {
     if (modalCustomerNameInput) modalCustomerNameInput.value = '';
     if (modalDeliveryAddressInput) modalDeliveryAddressInput.value = '';
     if (modalTrocoValueInput) modalTrocoValueInput.value = '';
-    // Limpa os novos campos de comprador online
-    if (modalBuyerNameInput) modalBuyerNameInput.value = '';
+    // Limpa o novo campo de email do comprador online
     if (modalBuyerEmailInput) modalBuyerEmailInput.value = '';
     
     if (modalDeliveryCheckbox) modalDeliveryCheckbox.checked = false;
@@ -1492,7 +1490,7 @@ function clearCart() {
     if (onlinePaymentSection) removeHighlightField('online-payment-section');
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value');
-    removeHighlightField('modal-buyer-name');
+    // Removido: removeHighlightField('modal-buyer-name');
     removeHighlightField('modal-buyer-email');
     
     // Reseta o estado e visibilidade das seções de pagamento
@@ -1612,8 +1610,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modalCustomerNameInput?.addEventListener('input', () => { removeHighlightField('modal-customer-name'); updateUI(); });
         modalDeliveryAddressInput?.addEventListener('input', () => { removeHighlightField('modal-delivery-address'); updateUI(); });
         modalTrocoValueInput?.addEventListener('input', () => { removeHighlightField('modal-troco-value'); updateUI(); });
-        // Novos listeners para nome e email do comprador online
-        modalBuyerNameInput?.addEventListener('input', () => { removeHighlightField('modal-buyer-name'); updateUI(); });
+        // Novo listener para email do comprador online
         modalBuyerEmailInput?.addEventListener('input', () => { removeHighlightField('modal-buyer-email'); updateUI(); });
         
         // Listener para os clicks nos cards de pagamento (garante que o rádio é marcado e a função é chamada)
