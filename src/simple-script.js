@@ -4,9 +4,6 @@
 const MERCADO_PAGO_PUBLIC_KEY = "APP_USR-29c92465-6af3-4415-afd9-cd41511d7f8e"; // <-- SUBSTITUA PELA SUA CHAVE PÚBLICA
 const BACKEND_URL = "https://apihook.onrender.com"; // <-- SUBSTITUA PELA URL DO SEU BACKEND NO RENDER
 
-// Inicializa o SDK do Mercado Pago
-// REMOVIDO: const mp = new MercadoPago(MERCADO_PAGO_PUBLIC_KEY);
-
 // Variável para guardar a instância dos bricks
 let cardPaymentBrickController;
 
@@ -619,6 +616,7 @@ async function renderCardPaymentBrick(amount, preferenceId) {
     // 2. Cria a instância de MercadoPago e obtém o bricksBuilder
     const mpInstance = new window.MercadoPago(MERCADO_PAGO_PUBLIC_KEY);
     
+    // VERIFICAÇÃO ADICIONAL: Garante que mpInstance.bricks é uma função antes de chamar.
     if (typeof mpInstance.bricks !== 'function') {
         console.error("mpInstance.bricks() não é uma função. Bricks do MercadoPago não estão prontos para renderizar.");
         showCustomAlert("Erro: O construtor de pagamento não está pronto. Tente novamente em alguns segundos.", "error");
@@ -637,8 +635,14 @@ async function renderCardPaymentBrick(amount, preferenceId) {
             visual: { style: { theme: 'dark' } },
         },
         callbacks: {
+            onReady: () => { // ADICIONADO: Callback onReady
+                console.log('CardPayment Brick: onReady - Brick pronto para interação.');
+                // Você pode adicionar lógica aqui para, por exemplo, habilitar um botão de "Continuar"
+                // ou ajustar a interface quando o Brick estiver visível e interativo.
+            },
             onSubmit: async (cardFormData) => {
                 try {
+                    // Esta chamada é para a rota /create-mercadopago-card do seu backend
                     const paymentResponse = await fetch(`${BACKEND_URL}/create-mercadopago-card`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
