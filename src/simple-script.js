@@ -340,17 +340,6 @@ function getProductById(productId) {
     return null;
 }
 
-// Função auxiliar para encontrar a category_id do item
-function getProductCategory(productId) {
-    for (const categoryKey in allProducts) {
-        if (allProducts[categoryKey].some(p => p.id === productId)) {
-            return categoryKey; // Retorna a chave da categoria
-        }
-    }
-    return ''; // Se não encontrar
-}
-
-
 const complements = {
     alface: { name: 'Alface', price: 0, category: 'gratis' },
     tomate: { name: 'Tomate', price: 0, category: 'gratis' },
@@ -406,10 +395,9 @@ const pixQrCodeImage = document.getElementById('pixQrCodeImage');
 const pixCopiaEColaInput = document.getElementById('pixCopiaEColaInput');
 const copyPixCodeBtn = document.getElementById('copyPixCodeBtn');
 
-// Campos para e-mail e sobrenome do comprador online
+// Campos para e-mail do comprador online
 const modalBuyerInfoSection = document.getElementById('modal-buyer-info-section');
 const modalBuyerEmailInput = document.getElementById('modal-buyer-email');
-const modalBuyerLastNameInput = document.getElementById('modal-buyer-last-name'); // ADICIONADO
 
 
 // =========================================================
@@ -452,7 +440,6 @@ async function initiateOnlinePayment() {
     // 3. Valida o campo de e-mail do comprador online
     const customerName = modalCustomerNameInput?.value.trim(); // Usa o nome do campo geral
     const buyerEmail = modalBuyerEmailInput?.value.trim();
-    const buyerLastName = modalBuyerLastNameInput?.value.trim() || ''; // Captura o sobrenome
 
     if (!buyerEmail || !isValidEmail(buyerEmail)) {
         showCustomAlert("Por favor, preencha um e-mail válido para o pagamento online.", "error");
@@ -482,7 +469,6 @@ async function initiateOnlinePayment() {
                 body: JSON.stringify({
                     customerName: customerName, // Usa o nome do campo geral
                     customerEmail: buyerEmail, // Usa o email do comprador online
-                    customerLastName: buyerLastName, // ADICIONADO
                     items: cart.map(item => {
                         const product = getProductById(item.productId);
                         if (!product) return null;
@@ -495,16 +481,10 @@ async function initiateOnlinePayment() {
                             }
                             return '';
                         }).filter(Boolean);
-                        
-                        const categoryId = getProductCategory(product.id); // Obtém a categoria
-                        
                         return {
-                            id: product.id, // AÇÃO RECOMENDADA: items.id
-                            title: product.name, // AÇÃO RECOMENDADA: items.title
-                            description: product.description || '', // AÇÃO RECOMENDADA: items.description
-                            category_id: categoryId, // AÇÃO RECOMENDADA: items.category_id
-                            quantity: 1, // AÇÃO RECOMENDADA: items.quantity
-                            unit_price: parseFloat(itemTotal.toFixed(2)) // AÇÃO RECOMENDADA: items.unit_price
+                            title: product.name + (complementNames.length > 0 ? ` (${complementNames.join(', ')})` : ''),
+                            quantity: 1,
+                            unit_price: parseFloat(itemTotal.toFixed(2))
                         };
                     }).filter(Boolean),
                     total: totalValue
@@ -555,21 +535,14 @@ async function initiateOnlinePayment() {
                             }
                             return '';
                         }).filter(Boolean);
-
-                        const categoryId = getProductCategory(product.id); // Obtém a categoria
-
                         return {
-                            id: product.id, // AÇÃO RECOMENDADA: items.id
-                            title: product.name, // AÇÃO RECOMENDADA: items.title
-                            description: product.description || '', // AÇÃO RECOMENDADA: items.description
-                            category_id: categoryId, // AÇÃO RECOMENDADA: items.category_id
+                            title: product.name + (complementNames.length > 0 ? ` (${complementNames.join(', ')})` : ''),
                             quantity: 1, 
                             unit_price: parseFloat(itemTotal.toFixed(2))
                         };
                     }).filter(Boolean),
                     customerName: customerName, // Usa o nome do campo geral do pedido
                     customerEmail: buyerEmail, // Usa o email do campo de comprador online
-                    customerLastName: buyerLastName, // ADICIONADO
                     total: totalValue // Total calculado do carrinho
                 })
             });
@@ -669,6 +642,7 @@ async function renderCardPaymentBrick(amount, preferenceId) {
             },
             onSubmit: async (cardFormData) => {
                 try {
+                    // Esta chamada é para a rota /create-mercadopago-card do seu backend
                     const paymentResponse = await fetch(`${BACKEND_URL}/create-mercadopago-card`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1303,7 +1277,7 @@ function updateTotal() {
     cart.forEach(item => {
         const product = getProductById(item.productId);
         if (product) {
-            total += product.price; // Corrigido para 'total' ao invés de 'currentTotal' aqui se 'total' é global
+            currentTotal += product.price;
             item.complements.forEach(id => {
                 const compInfo = complements[id];
                 if (compInfo) {
@@ -1405,7 +1379,6 @@ function selectPaymentMethod(method) {
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value'); 
     removeHighlightField('modal-buyer-email');
-    removeHighlightField('modal-buyer-last-name'); // ADICIONADO
 
     updateTotal();
     validateOrder(false); 
@@ -1561,9 +1534,8 @@ function clearCart() {
     if (modalCustomerNameInput) modalCustomerNameInput.value = '';
     if (modalDeliveryAddressInput) modalDeliveryAddressInput.value = '';
     if (modalTrocoValueInput) modalTrocoValueInput.value = '';
-    // Limpa o novo campo de email e sobrenome do comprador online
+    // Limpa o novo campo de email do comprador online
     if (modalBuyerEmailInput) modalBuyerEmailInput.value = '';
-    if (modalBuyerLastNameInput) modalBuyerLastNameInput.value = ''; // ADICIONADO
     
     if (modalDeliveryCheckbox) modalDeliveryCheckbox.checked = false;
     if (modalPickupCheckbox) modalPickupCheckbox.checked = false;
@@ -1580,7 +1552,6 @@ function clearCart() {
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value');
     removeHighlightField('modal-buyer-email');
-    removeHighlightField('modal-buyer-last-name'); // ADICIONADO
     
     // Reseta o estado e visibilidade das seções de pagamento
     if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
@@ -1699,9 +1670,8 @@ document.addEventListener('DOMContentLoaded', () => {
         modalCustomerNameInput?.addEventListener('input', () => { removeHighlightField('modal-customer-name'); updateUI(); });
         modalDeliveryAddressInput?.addEventListener('input', () => { removeHighlightField('modal-delivery-address'); updateUI(); });
         modalTrocoValueInput?.addEventListener('input', () => { removeHighlightField('modal-troco-value'); updateUI(); });
-        // Novos listeners para email e sobrenome do comprador online
+        // Novo listener para email do comprador online
         modalBuyerEmailInput?.addEventListener('input', () => { removeHighlightField('modal-buyer-email'); updateUI(); });
-        modalBuyerLastNameInput?.addEventListener('input', () => { removeHighlightField('modal-buyer-last-name'); updateUI(); }); // ADICIONADO
         
         // Listener para os clicks nos cards de pagamento (garante que o rádio é marcado e a função é chamada)
         document.querySelectorAll('#cart-modal-content .payment-card').forEach(card => {
