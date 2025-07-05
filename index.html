@@ -121,8 +121,27 @@
                   </div>
               </section>
     
-              <div id="modal-payment-choice-section" class="payment-section">
-                  <h4>Como você quer pagar? (Via WhatsApp)</h4>
+              <section class="payment-section" id="online-payment-section">
+                  <h4>Pagar Online</h4>
+                  <div class="payment-options">
+                      <label class="payment-card" data-method="online-pix">
+                          <input type="radio" name="modal-payment" value="online-pix" onchange="selectPaymentMethod('online-pix')">
+                          <img src="/icons/pix.png" alt="Pix" />
+                          <div>Pix</div>
+                      </label>
+                      <label class="payment-card" data-method="online-card">
+                          <input type="radio" name="modal-payment" value="online-card" onchange="selectPaymentMethod('online-card')">
+                          <img src="/icons/card.png" alt="Cartão" />
+                          <div>Cartão</div>
+                      </label>
+                  </div>
+                  <button class="confirm-btn btn-online" id="modal-online-payment-btn" onclick="initiateOnlinePayment()" style="margin-top: 15px;">
+                      Pagar Online Agora
+                  </button>
+              </section>
+
+              <section class="payment-section" id="whatsapp-payment-section" style="margin-top: 20px;">
+                  <h4>Pagar pelo WhatsApp</h4>
                   <div class="payment-options">
                       <label class="payment-card" data-method="whatsapp-pix">
                           <input type="radio" name="modal-payment" value="whatsapp-pix" onchange="selectPaymentMethod('whatsapp-pix')">
@@ -144,31 +163,36 @@
                       <label for="modal-troco-value">Precisa de troco para quanto?</label>
                       <input type="number" id="modal-troco-value" placeholder="Ex: 50,00" />
                   </div>
-              </div>
+                  <button class="confirm-btn btn-whatsapp" id="modal-confirm-whatsapp-btn" onclick="confirmAllOrders()" style="margin-top: 15px;">
+                      Enviar Pedido via WhatsApp
+                  </button>
+              </section>
           </div>
         </div>
         
-        <div class="modal-cart-actions">
-            <button class="confirm-btn btn-online" id="modal-online-payment-btn" onclick="initiateOnlinePayment()">
-              Pagar Online (Pix ou Cartão)
-            </button>
-            
-            <button class="confirm-btn btn-whatsapp" id="modal-confirm-all-btn" onclick="confirmAllOrders()">
-              Finalizar e Combinar via WhatsApp
-            </button>
-            
+        <div class="modal-cart-actions-bottom" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--color-border); text-align: center;">
             <button class="modal-clear-cart-btn" onclick="clearCart()">
               Limpar Carrinho
             </button>
         </div>
 
-        <div id="payment-bricks-container" style="display: none; margin-top: 20px;">
-            <h4 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 15px;">Detalhes do Pagamento</h4>
+        <div id="pixPaymentDetails" style="display: none; text-align: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--color-border);">
+            <h4>Pague com Pix</h4>
+            <img id="pixQrCodeImage" src="" alt="QR Code Pix" style="max-width: 200px; height: auto; margin-top: 15px;">
+            <p style="margin-top: 15px;">Ou copie o código:</p>
+            <div style="display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="pixCopiaEColaInput" value="" readonly style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 1; min-width: 200px;">
+                <button id="copyPixCodeBtn" style="padding: 8px 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Copiar</button>
+            </div>
+            <p style="font-size: 0.9em; color: #555; margin-top: 10px;">Aguardando confirmação do pagamento...</p>
+            <button class="confirm-btn" style="margin-top: 20px;" onclick="closeCartModal()">Fechar</button>
+        </div>
+
+        <div id="payment-bricks-container" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--color-border);">
+            <h4 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 15px;">Detalhes do Pagamento com Cartão</h4>
             <div id="cardPaymentBrick_container"></div>
             
-            <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
-            
-            <div id="pixPaymentBrick_container"></div>
+            <button class="confirm-btn" style="margin-top: 20px;" onclick="closeCartModal()">Fechar</button>
         </div>
 
       </div>
