@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edienai Lanches</title>
+    <link rel="stylesheet" href="src/styles.css" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-FT7NYWC2D3"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-FT7NYWC2D3');
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
+    
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyBh8J0_xp0hVjVNDytsou55LM3gVvHU8O0",
+        authDomain: "acaiemcasa.firebaseapp.com",
+        projectId: "acaiemcasa",
+        storageBucket: "acaiemcasa.firebasestorage.app",
+        messagingSenderId: "652069049610",
+        appId: "1:652069049610:web:c537513be83d4cf23f16f3"
+      };
+      const app = firebase.initializeApp(firebaseConfig);
+      const functions = firebase.functions();
+    </script>
+  </head>
+  <body>
+    <div class="fixed-header">
+      <div class="header-top">
+        <div class="header-logo">Edienai lanches</div>
+      </div>
+      <div class="header-middle">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="main-search-input" placeholder="Buscar no cardápio..." onkeyup="filterProductsMainPage()">
+      </div>
+    </div>
+
+    <div class="container">
+      <section class="section category-cards-section">
+       
+        <div class="category-cards-grid" id="category-cards-grid">
+          </div>
+      </section>
+
+      <div class="products-list" id="products-list-main"></div>
+
+      </div>
+
+    <nav class="bottom-nav">
+        <a href="#" class="nav-item active" onclick="renderNewHomePage()">
+            <span class="nav-icon">🏠</span>
+            <span class="nav-text">Início</span>
+        </a>
+        <a href="#" class="nav-item" onclick="showCategoriesPage()">
+            <span class="nav-icon">🍔</span>
+            <span class="nav-text">Categorias</span>
+        </a>
+        <a href="#" class="nav-item" id="cart-nav-item" onclick="openCartModal()">
+            <span class="nav-icon">🛒</span>
+            <span class="nav-text">Meu Pedido</span>
+            <span id="cart-count">0</span>
+        </a>
+    </nav>
+
+    <div id="cart-modal-overlay" class="modal-overlay">
+      <div id="cart-modal-content" class="modal-content">
+        <button class="close-modal-btn" onclick="closeCartModal()">X</button>
+    
+        <div class="modal-header">
+          <h3>Seu Pedido</h3>
+          <p>Confira os itens e preencha seus dados para finalizar.</p>
+        </div>
+    
+        <ul id="cart-modal-list" class="cart-items-list">
+          </ul>
+        
+        <div class="modal-summary">
+          <span>Total</span>
+          <span id="modal-total-price">R$ 0,00</span>
+        </div>
+    
+        <div class="modal-form-container">
+          <div class="modal-section-group">
+              <section class="form-section">
+                  <h4>Seu nome</h4>
+                  <div class="input-group">
+                    <input type="text" id="modal-customer-name" placeholder="Digite seu nome completo" />
+                  </div>
+              </section>
+    
+              <section class="delivery-section">
+                  <h4>Opções de Entrega</h4>
+                  <div class="delivery-options-wrapper" id="modal-delivery-options-wrapper">
+                      <label class="delivery-option-label">
+                          <input type="checkbox" id="modal-delivery-checkbox" onchange="handleDeliveryChange(this)" />
+                          <div class="delivery-option-content">
+                            <span>Entrega (+ R$ 2,00)</span>
+                          </div>
+                      </label>
+                      <label class="delivery-option-label">
+                          <input type="checkbox" id="modal-pickup-checkbox" onchange="handlePickupChange(this)" />
+                          <div class="delivery-option-content">
+                            <span>Retirar no local</span>
+                          </div>
+                      </label>
+                  </div>
+              </section>
+    
+              <section class="form-section" id="modal-delivery-address-section" style="display: none;">
+                  <h4>Endereço de Entrega</h4>
+                  <div class="input-group">
+                    <input type="text" id="modal-delivery-address" placeholder="Rua, Número, Bairro, Referência" />
+                  </div>
+              </section>
+    
+              <div id="modal-payment-choice-section" class="payment-section">
+                  <h4>Como você quer pagar? (Via WhatsApp)</h4>
+                  <div class="payment-options">
+                      <label class="payment-card" data-method="whatsapp-pix">
+                          <input type="radio" name="modal-payment" value="whatsapp-pix" onchange="selectPaymentMethod('whatsapp-pix')">
+                          <img src="/icons/pix.png" alt="Pix" />
+                          <div>Pix</div>
+                      </label>
+                      <label class="payment-card" data-method="whatsapp-especie">
+                          <input type="radio" name="modal-payment" value="whatsapp-especie" onchange="selectPaymentMethod('whatsapp-especie')">
+                          <img src="/icons/money.png" alt="Dinheiro" />
+                          <div>Dinheiro</div>
+                      </label>
+                      <label class="payment-card" data-method="whatsapp-cartao">
+                          <input type="radio" name="modal-payment" value="whatsapp-cartao" onchange="selectPaymentMethod('whatsapp-cartao')">
+                          <img src="/icons/card.png" alt="Cartão" />
+                          <div>Cartão</div>
+                      </label>
+                  </div>
+                  <div id="modal-troco-section" style="display: none" class="troco-input-group">
+                      <label for="modal-troco-value">Precisa de troco para quanto?</label>
+                      <input type="number" id="modal-troco-value" placeholder="Ex: 50,00" />
+                  </div>
+              </div>
+          </div>
+        </div>
+        
+        <div class="modal-cart-actions">
+            <button class="confirm-btn btn-online" id="modal-online-payment-btn" onclick="initiateOnlinePayment()">
+              Pagar Online (Pix ou Cartão)
+            </button>
+            
+            <button class="confirm-btn btn-whatsapp" id="modal-confirm-all-btn" onclick="confirmAllOrders()">
+              Finalizar e Combinar via WhatsApp
+            </button>
+            
+            <button class="modal-clear-cart-btn" onclick="clearCart()">
+              Limpar Carrinho
+            </button>
+        </div>
+
+        <div id="payment-bricks-container" style="display: none; margin-top: 20px;">
+            <h4 style="font-size: 1.1rem; font-weight: 600; margin-bottom: 15px;">Detalhes do Pagamento</h4>
+            <div id="cardPaymentBrick_container"></div>
+            
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+            
+            <div id="pixPaymentBrick_container"></div>
+        </div>
+
+      </div>
+    </div>
+    <div id="complements-modal-overlay" class="modal-overlay">
+      <div id="complements-modal-content" class="modal-content">
+        <button class="close-modal-btn" onclick="cancelComplementsSelection()">X</button>
+        <h3>Escolha seus adicionais</h3>
+        <div id="complement-limit-info-modal"></div>
+        <div class="search-complement-wrapper">
+          <input type="text" id="complement-search-input" placeholder="Pesquisar adicional..." onkeyup="filterComplements()" />
+          <span class="search-icon">🔍</span>
+        </div>
+        <div class="complements-scroll-area">
+          <div class="complement-category">
+            <h4>Adicionais Grátis</h4>
+            <div class="complements-grid">
+              </div>
+          </div>
+        </div>
+        <div class="complement-modal-actions">
+          <button class="confirm-complement-btn" onclick="confirmComplementsAndAddToCart()">
+            Confirmar e Adicionar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Edienai Lanches</p>
+      <p>Instagram: @edienailanches</p>
+    </footer>
+
+    <div id="custom-alert-overlay" class="custom-alert-overlay">
+      <div id="custom-alert-box" class="custom-alert-box">
+        <span class="custom-alert-close-btn" onclick="closeCustomAlert()">X</span>
+        <p id="custom-alert-message" class="custom-alert-message"></p>
+        <button class="custom-alert-ok-btn" onclick="closeCustomAlert()">OK</button>
+      </div>
+    </div>
+    <script src="src/simple-script.js"></script>
+  </body>
+</html>
