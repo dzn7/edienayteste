@@ -5,7 +5,7 @@ const MERCADO_PAGO_PUBLIC_KEY = "APP_USR-29c92465-6af3-4415-afd9-cd41511d7f8e"; 
 const BACKEND_URL = "https://apihook.onrender.com"; // <-- SUBSTITUA PELA URL DO SEU BACKEND NO RENDER
 
 // Inicializa o SDK do Mercado Pago
-const mp = new MercadoPago(MERCADO_PAGO_PUBLIC_KEY);
+// REMOVIDO: const mp = new MercadoPago(MERCADO_PAGO_PUBLIC_KEY);
 
 // Variável para guardar a instância dos bricks
 let cardPaymentBrickController;
@@ -454,6 +454,7 @@ async function initiateOnlinePayment() {
         return;
     }
 
+
     // 4. Mostra uma mensagem de "carregando"
     if (modalOnlinePaymentBtn) {
         modalOnlinePaymentBtn.textContent = 'Aguarde, preparando pagamento...';
@@ -520,6 +521,7 @@ async function initiateOnlinePayment() {
             console.log("Iniciando fluxo de Cartão online: solicitando preferenceId ao backend...");
             
             // 1. Chamar o NOVO ENDPOINT no backend para criar a preferência
+            // Este endpoint é o /create-mercadopago-preference
             const preferenceResponse = await fetch(`${BACKEND_URL}/create-mercadopago-preference`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -561,67 +563,12 @@ async function initiateOnlinePayment() {
                 throw new Error("ID da preferência de pagamento com cartão não foi recebido do backend.");
             }
 
-            // 2. Com o preferenceId, renderize o Brick de Cartão COM CALLBACKS OBRIGATÓRIOS
+            // 2. Com o preferenceId, renderize o Brick de Cartão
             console.log("Preferência ID recebida:", preferenceId, "Renderizando Brick de Cartão...");
-            
-            // Limpa o container antes de renderizar
-            const bricksContainer = document.getElementById('cardPaymentBrick_container');
-            if (bricksContainer) bricksContainer.innerHTML = '';
-
-            // Renderiza o Brick de Cartão com todos os callbacks obrigatórios
-            await window.cardPaymentBrick.render({
-                amount: totalValue,
-                preferenceId: preferenceId,
-                callbacks: {
-                    onReady: () => {
-                        console.log('✅ Brick de Cartão carregado com sucesso!');
-                        showCustomAlert("Formulário de Cartão pronto para preenchimento.", "info");
-                    },
-                    onSubmit: async (cardFormData) => {
-                        console.log('🔄 Processando pagamento com cartão:', cardFormData);
-                        
-                        try {
-                            // Envia os dados do cartão para o backend
-                            const paymentResponse = await fetch(`${BACKEND_URL}/create-mercadopago-card`, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                },
-                                body: JSON.stringify(cardFormData)
-                            });
-
-                            const paymentResult = await paymentResponse.json();
-                            
-                            if (paymentResult.status === 'approved') {
-                                console.log('✅ Pagamento aprovado!');
-                                showCustomAlert('Pagamento aprovado com sucesso!', 'success');
-                                // Limpa o carrinho ou redireciona conforme necessário
-                                clearCart();
-                            } else if (paymentResult.status === 'pending') {
-                                console.log('⏳ Pagamento pendente');
-                                showCustomAlert('Pagamento está sendo processado. Aguarde a confirmação.', 'info');
-                            } else {
-                                console.log('❌ Pagamento rejeitado:', paymentResult);
-                                showCustomAlert('Pagamento rejeitado. Tente novamente ou use outro método de pagamento.', 'error');
-                            }
-                            
-                            return paymentResult;
-                        } catch (error) {
-                            console.error('💥 Erro ao processar pagamento:', error);
-                            showCustomAlert('Erro ao processar pagamento. Tente novamente.', 'error');
-                            throw error;
-                        }
-                    },
-                    onError: (error) => {
-                        console.error('💥 Erro no Brick de Cartão:', error);
-                        showCustomAlert('Erro no formulário de pagamento. Tente recarregar a página.', 'error');
-                    }
-                }
-            });
-
+            await renderCardPaymentBrick(totalValue, preferenceId);
             const paymentBricksContainer = document.getElementById('payment-bricks-container');
             if (paymentBricksContainer) paymentBricksContainer.style.display = 'block'; // Mostra o container do Brick
-            console.log('✅ Brick de Cartão renderizado com sucesso!');
+            showCustomAlert("Formulário de Cartão pronto para preenchimento.", "info");
 
         } else {
             // Este bloco não deve ser atingido se a validação acima funcionar
@@ -648,32 +595,6 @@ async function initiateOnlinePayment() {
     }
 }
 
-// Função auxiliar para limpar o carrinho após pagamento aprovado
-function clearCart() {
-    try {
-        // Limpa o carrinho da variável global
-        if (typeof cart !== 'undefined') {
-            cart = [];
-        }
-        // Limpa do localStorage se estiver usando
-        if (typeof localStorage !== 'undefined') {
-            localStorage.removeItem('cart');
-        }
-        // Atualiza a interface do carrinho
-        if (typeof updateCartDisplay === 'function') {
-            updateCartDisplay();
-        }
-        // Fecha o modal de pagamento
-        const modal = document.getElementById('payment-modal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-        console.log('🧹 Carrinho limpo após pagamento aprovado');
-    } catch (error) {
-        console.error('Erro ao limpar carrinho:', error);
-    }
-}
-
 // Função para validar formato de e-mail básico
 function isValidEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -688,7 +609,24 @@ async function renderCardPaymentBrick(amount, preferenceId) {
         cardPaymentBrickController = null;
     }
 
-    const bricksBuilder = mp.bricks();
+    // 1. Verifica se a SDK do Mercado Pago está carregada
+    if (typeof window.MercadoPago === 'undefined') {
+        console.error("MercadoPago SDK (window.MercadoPago) não está carregado. Verifique o script SDK e a conexão.");
+        showCustomAlert("Erro: O sistema de pagamento não está pronto (SDK ausente). Tente novamente em alguns segundos.", "error");
+        return;
+    }
+
+    // 2. Cria a instância de MercadoPago e obtém o bricksBuilder
+    const mpInstance = new window.MercadoPago(MERCADO_PAGO_PUBLIC_KEY);
+    
+    if (typeof mpInstance.bricks !== 'function') {
+        console.error("mpInstance.bricks() não é uma função. Bricks do MercadoPago não estão prontos para renderizar.");
+        showCustomAlert("Erro: O construtor de pagamento não está pronto. Tente novamente em alguns segundos.", "error");
+        return;
+    }
+    
+    const bricksBuilder = mpInstance.bricks(); // Obtém o construtor de Bricks da instância
+
 
     const cardSettings = {
         initialization: {
@@ -701,7 +639,6 @@ async function renderCardPaymentBrick(amount, preferenceId) {
         callbacks: {
             onSubmit: async (cardFormData) => {
                 try {
-                    // Esta chamada é para a rota /create-mercadopago-card do seu backend
                     const paymentResponse = await fetch(`${BACKEND_URL}/create-mercadopago-card`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1204,7 +1141,7 @@ function confirmComplementsAndAddToCart() {
     updateTotal();
     updateCartCount();
     closeComplementsModal();
-    showCustomAlert(`${productInfo.name} com adicionais adicionado ao carrinho!`);
+    showCustomAlert(`${productInfo.name} adicionado ao carrinho!`);
     openCartModal();
 }
 
