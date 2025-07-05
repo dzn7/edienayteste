@@ -9,7 +9,6 @@ const mp = new MercadoPago(MERCADO_PAGO_PUBLIC_KEY);
 
 // Variável para guardar a instância dos bricks
 let cardPaymentBrickController;
-// Não precisamos mais do pixPaymentBrickController se o Pix for exibido manualmente
 
 // Estrutura de Produtos por Categoria
 const allProducts = {
@@ -383,15 +382,17 @@ const modalDeliveryCheckbox = document.getElementById('modal-delivery-checkbox')
 const modalPickupCheckbox = document.getElementById('modal-pickup-checkbox');
 const modalDeliveryAddressSection = document.getElementById('modal-delivery-address-section');
 const modalDeliveryAddressInput = document.getElementById('modal-delivery-address');
-// const modalEmailPhoneFields = document.getElementById('modal-email-phone-fields'); // Removido, não é usado no fluxo atual
 
-const modalConfirmAllBtn = document.getElementById('modal-confirm-all-btn');
-
-const modalPaymentChoiceSection = document.getElementById('modal-payment-choice-section');
 const modalTrocoSection = document.getElementById('modal-troco-section');
 const modalTrocoValueInput = document.getElementById('modal-troco-value');
 
-// Novos elementos do HTML para o Pix
+// Novos elementos do HTML para as seções de pagamento
+const onlinePaymentSection = document.getElementById('online-payment-section');
+const whatsappPaymentSection = document.getElementById('whatsapp-payment-section');
+const modalOnlinePaymentBtn = document.getElementById('modal-online-payment-btn');
+const modalConfirmWhatsappBtn = document.getElementById('modal-confirm-whatsapp-btn');
+
+// Elementos para exibir os detalhes do Pix
 const pixPaymentDetailsDiv = document.getElementById('pixPaymentDetails');
 const pixQrCodeImage = document.getElementById('pixQrCodeImage');
 const pixCopiaEColaInput = document.getElementById('pixCopiaEColaInput');
@@ -403,34 +404,42 @@ const copyPixCodeBtn = document.getElementById('copyPixCodeBtn');
 // =========================================================
 
 async function initiateOnlinePayment() {
-    // Esconde a seção de escolha de pagamento e os botões de ação do carrinho
-    if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'none';
-    const modalCartActions = document.querySelector('.modal-cart-actions');
-    if (modalCartActions) modalCartActions.style.display = 'none';
-
-    // Esconde as seções de detalhes de pagamento online (Pix e Cartão) inicialmente
+    // Esconde as seções de escolha de pagamento
+    if (onlinePaymentSection) onlinePaymentSection.style.display = 'none';
+    if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'none';
+    
+    // Esconde as seções de detalhes de pagamento online (Pix e Bricks)
     if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
     const paymentBricksContainer = document.getElementById('payment-bricks-container');
     if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
 
-    // 1. Valida se o formulário do carrinho está preenchido (nome, endereço, etc.)
-    const isValid = validateOrder(true, false); // Valida sem checar os botões de rádio de pagamento manual
+    // 1. Valida os campos obrigatórios (nome, entrega)
+    const isValid = validateOrder(true); // validateOrder agora só checa nome e entrega
     if (!isValid) {
         showCustomAlert("Por favor, preencha seu nome e a opção de entrega antes de continuar.", "error");
         // Reverte a visibilidade dos elementos se a validação falhar
-        if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
-        if (modalCartActions) modalCartActions.style.display = 'flex';
+        if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+        if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
         return;
     }
 
-    // 2. Mostra uma mensagem de "carregando"
-    const payButton = document.getElementById('modal-online-payment-btn');
-    if (payButton) {
-        payButton.textContent = 'Aguarde, preparando pagamento...';
-        payButton.disabled = true;
+    // Valida se um método de pagamento ONLINE foi selecionado
+    const selectedOnlinePaymentMethod = document.querySelector('input[name="modal-payment"]:checked')?.value;
+    if (!selectedOnlinePaymentMethod || !selectedOnlinePaymentMethod.startsWith('online-')) {
+        showCustomAlert("Por favor, selecione uma opção de pagamento online (Pix ou Cartão).", "error");
+        if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+        if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+        if (modalOnlinePaymentBtn) shakeButton(modalOnlinePaymentBtn);
+        return;
     }
 
-    const selectedOnlinePaymentMethod = document.querySelector('input[name="modal-payment"]:checked')?.value;
+
+    // 2. Mostra uma mensagem de "carregando"
+    if (modalOnlinePaymentBtn) {
+        modalOnlinePaymentBtn.textContent = 'Aguarde, preparando pagamento...';
+        modalOnlinePaymentBtn.disabled = true;
+    }
+
     const totalValue = parseFloat(document.getElementById('modal-total-price').innerText.replace('R$ ', '').replace(',', '.')) || 0;
     const customerName = modalCustomerNameInput.value.trim();
     const customerEmail = "test@test.com"; // Considerar adicionar um campo de email real no HTML se necessário
@@ -491,64 +500,37 @@ async function initiateOnlinePayment() {
 
         } else if (selectedOnlinePaymentMethod === 'online-card') {
             console.log("Pagamento com Cartão online selecionado. NOTA: O backend precisa fornecer uma 'preferenceId' para o Brick de Cartão.");
-            // *** IMPORTANTE: LEIA ESTA SEÇÃO ***
-            // O endpoint '/create-mercadopago-card' do seu server.js está configurado
-            // para RECEBER dados tokenizados do cartão e processar o pagamento diretamente.
-            // O 'cardPayment' Brick do Mercado Pago, por padrão, precisa de um 'preferenceId'
-            // para ser inicializado. Isso significa que você precisaria de um ENDPOINT NO BACKEND
-            // que apenas CRIE UMA PREFERÊNCIA (sem processar o pagamento ainda) e retorne o ID dela.
-            // Se você quer usar o Brick, seu backend precisaria de uma rota como '/create_preference'
-            // que gerasse uma preferência e retornasse o ID dela para o frontend.
-            // Por enquanto, esta funcionalidade está apenas com um alerta de aviso.
-
+            
             showCustomAlert("O pagamento com Cartão Online está em desenvolvimento e requer configuração adicional no backend para usar os Bricks. Por favor, utilize o Pix Online ou as opções via WhatsApp.", "warning");
             
             // Reverte a visibilidade dos elementos se o fluxo não for implementado
-            if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
-            if (modalCartActions) modalCartActions.style.display = 'flex';
-
-            // Exemplo de como você CHAMARIA o renderCardPaymentBrick SE seu backend
-            // tivesse uma rota que retornasse uma preferenceId para o cartão:
-            /*
-            const responseCardPreference = await fetch(`${BACKEND_URL}/create-preference-for-card`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ items: cartItems, total: totalValue, payerEmail: customerEmail })
-            });
-            if (!responseCardPreference.ok) {
-                throw new Error("Falha ao obter preferência para pagamento com cartão.");
-            }
-            const cardPreference = await responseCardPreference.json();
-            if (cardPreference.id) {
-                await renderCardPaymentBrick(totalValue, cardPreference.id);
-                if (paymentBricksContainer) paymentBricksContainer.style.display = 'block';
-            } else {
-                throw new Error("ID da preferência de cartão não foi recebido do backend.");
-            }
-            */
+            if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+            if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
 
         } else {
+            // Este bloco não deve ser atingido se a validação acima funcionar
             showCustomAlert("Por favor, selecione um método de pagamento online (Pix ou Cartão).", "error");
-            // Reverte a visibilidade dos elementos
-            if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
-            if (modalCartActions) modalCartActions.style.display = 'flex';
+            if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+            if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
         }
 
     } catch (error) {
         console.error("Erro ao iniciar pagamento online:", error);
         showCustomAlert(`Erro ao iniciar pagamento online: ${error.message}`, "error");
         // Reverte a visibilidade dos elementos se houver erro
-        if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
-        if (modalCartActions) modalCartActions.style.display = 'flex';
+        if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+        if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
     } finally {
-        if (payButton) {
-            payButton.textContent = 'Continuar para Pagamento Online';
-            payButton.disabled = false;
+        if (modalOnlinePaymentBtn) {
+            modalOnlinePaymentBtn.textContent = 'Pagar Online Agora';
+            // Permanece desabilitado ou habilitado baseado na seleção após o erro
+            const currentSelected = document.querySelector('input[name="modal-payment"]:checked')?.value;
+            modalOnlinePaymentBtn.disabled = !currentSelected || !currentSelected.startsWith('online-');
         }
     }
 }
 
-// Função para renderizar APENAS o Brick de Cartão de Crédito
+// Função para renderizar APENAS o Brick de Cartão de Crédito (requer preferenceId do backend)
 async function renderCardPaymentBrick(amount, preferenceId) {
     if (cardPaymentBrickController) {
         await cardPaymentBrickController.unmount();
@@ -560,7 +542,7 @@ async function renderCardPaymentBrick(amount, preferenceId) {
     const cardSettings = {
         initialization: {
             amount: amount,
-            preferenceId: preferenceId,
+            preferenceId: preferenceId, // Esta preferenceId deve vir do backend
         },
         customization: {
             visual: { style: { theme: 'dark' } },
@@ -649,8 +631,9 @@ function removeHighlightField(elementId) {
         element.classList.remove('highlight-error');
         const parentLabel = document.querySelector(`label[for="${elementId}"]`);
         if (parentLabel) parentLabel.classList.remove('highlight-error');
-        const parentDiv = element.closest('.payment-options') || element.closest('.delivery-options-wrapper') || element.closest('.payment-mode-group') || element.closest('.modal-section-group');
-        if (parentDiv) parentDiv.classList.remove('highlight-error');
+        // Remove highlighting from parent sections as well if they were highlighted
+        const parentSection = element.closest('.payment-section') || element.closest('.delivery-section') || element.closest('.form-section');
+        if (parentSection) parentSection.classList.remove('highlight-error');
     }
 }
 
@@ -694,13 +677,14 @@ function openCartModal() {
     console.log("Abrindo modal do carrinho...");
     renderModalCart();
 
-    // Garante que as opções de pagamento original e botões de ação estejam visíveis ao abrir
-    const modalCartActions = document.querySelector('.modal-cart-actions');
-    if (modalCartActions) modalCartActions.style.display = 'flex';
-    if(modalPaymentChoiceSection) {
-        modalPaymentChoiceSection.style.display = 'block';
-    }
-    // Esconde as seções de pagamento online (Pix e Bricks)
+    // Mostra as seções de escolha de pagamento e desabilita os botões de ação inicialmente
+    if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+    if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+    
+    if (modalOnlinePaymentBtn) modalOnlinePaymentBtn.disabled = true;
+    if (modalConfirmWhatsappBtn) modalConfirmWhatsappBtn.disabled = true;
+
+    // Esconde as seções de detalhes de pagamento online (Pix e Bricks)
     if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
     const paymentBricksContainer = document.getElementById('payment-bricks-container');
     if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
@@ -712,15 +696,20 @@ function openCartModal() {
 function closeCartModal() {
     console.log("Fechando modal do carrinho...");
     toggleModal('cart-modal-overlay', false);
-    // Assegura que as seções de pagamento estejam visíveis para a próxima abertura
-    const modalCartActions = document.querySelector('.modal-cart-actions');
-    if (modalCartActions) modalCartActions.style.display = 'flex';
-    if(modalPaymentChoiceSection) {
-        modalPaymentChoiceSection.style.display = 'block';
-    }
+    // Assegura que as seções de pagamento estejam visíveis para a próxima abertura e resetadas
+    if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+    if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+    
+    if (modalOnlinePaymentBtn) modalOnlinePaymentBtn.disabled = true;
+    if (modalConfirmWhatsappBtn) modalConfirmWhatsappBtn.disabled = true;
+
     if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
     const paymentBricksContainer = document.getElementById('payment-bricks-container');
     if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
+    
+    // Limpa a seleção de rádio buttons
+    document.querySelectorAll('input[name="modal-payment"]').forEach(input => input.checked = false);
+    updatePaymentSelectionVisual(); // Remove a classe 'selected' visualmente
 }
 
 // --- FUNÇÕES DO MODAL DE CATEGORIAS REMOVIDAS ---
@@ -1258,48 +1247,57 @@ function handlePickupChange(checkbox) {
 }
 
 function selectPaymentMethod(method) {
+    // Desseleciona todos os cartões de pagamento
     document.querySelectorAll('#cart-modal-content .payment-card').forEach(el => {
         el.classList.remove('selected');
+        const radio = el.querySelector('input[name="modal-payment"]');
+        if (radio && radio.value !== method) { // Desmarca o rádio se não for o método atual
+            radio.checked = false;
+        }
     });
 
+    // Seleciona o cartão clicado
     const clickedCard = document.querySelector(`#cart-modal-content .payment-card[data-method="${method}"]`);
     if (clickedCard) {
         clickedCard.classList.add('selected');
+        const radioInput = clickedCard.querySelector('input[name="modal-payment"]');
+        if (radioInput) {
+            radioInput.checked = true;
+        }
     }
 
-    const radioInput = document.querySelector(`#cart-modal-content input[name="modal-payment"][value="${method}"]`);
-    if (radioInput) {
-        radioInput.checked = true;
-    }
-
-    if (modalTrocoSection) { 
+    // Gerencia a visibilidade da seção de troco
+    if (modalTrocoSection) {
         modalTrocoSection.style.display = method === "whatsapp-especie" ? "block" : "none";
     }
 
-    // A lógica de modalEmailPhoneFields foi removida daqui, pois o email para pagamentos online
-    // está sendo passado como "test@test.com" no backend por enquanto.
-    // Se precisar de input de email/telefone no frontend para pagamentos online,
-    // você precisará adicionar os campos e a lógica aqui.
+    // Habilita/desabilita os botões de ação com base na seleção
+    if (modalOnlinePaymentBtn) modalOnlinePaymentBtn.disabled = !method.startsWith('online-');
+    if (modalConfirmWhatsappBtn) modalConfirmWhatsappBtn.disabled = !method.startsWith('whatsapp-');
 
-    removeHighlightField('modal-payment-choice-section'); 
+    // Remove qualquer destaque de erro das seções de pagamento
+    if (onlinePaymentSection) removeHighlightField('online-payment-section');
+    if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value'); 
 
     updateTotal();
-    validateOrder(false);
-    updatePaymentSelectionVisual();
+    validateOrder(false); 
+    updatePaymentSelectionVisual(); 
 }
 
-function validateOrder(shouldHighlight = true, checkPaymentMethod = true) {
+function validateOrder(shouldHighlight = true) { 
     let isValid = true;
     let firstInvalidElement = null;
 
+    // Limpa destaques de erro anteriores
     if (shouldHighlight) {
         document.querySelectorAll('.highlight-error').forEach(el => el.classList.remove('highlight-error'));
+        // Não agita botões aqui, isso é feito nas funções específicas de ação
     }
-    if(modalConfirmAllBtn) modalConfirmAllBtn.classList.remove('shake-animation');
-
+    
     if (cart.length === 0) {
         isValid = false;
+        // Nenhum elemento para destacar para carrinho vazio, o alerta já faz isso
     }
 
     if (!modalCustomerNameInput?.value.trim()) {
@@ -1327,33 +1325,7 @@ function validateOrder(shouldHighlight = true, checkPaymentMethod = true) {
         }
     }
 
-    if (checkPaymentMethod) {
-        const selectedPayment = document.querySelector('#cart-modal-content input[name="modal-payment"]:checked');
-        if (!selectedPayment) {
-            isValid = false;
-            const paymentWrapper = document.getElementById('modal-payment-choice-section');
-            if (shouldHighlight && paymentWrapper) {
-                highlightField('modal-payment-choice-section');
-                firstInvalidElement ||= paymentWrapper;
-            }
-        }
-
-        // Validação para troco, só se aplica a "whatsapp-especie"
-        if (selectedPayment && selectedPayment.value === 'whatsapp-especie' && modalTrocoValueInput?.value.trim() !== '') {
-            const totalPedidoElement = document.getElementById("modal-total-price");
-            let totalPedido = parseFloat(totalPedidoElement.innerText.replace('R$ ', '').replace(',', '.'));
-            const trocoPara = parseFloat(modalTrocoValueInput.value.replace(',', '.'));
-            if (isNaN(trocoPara) || trocoPara < totalPedido) {
-                isValid = false;
-                if (shouldHighlight) {
-                    highlightField('modal-troco-value');
-                    firstInvalidElement ||= modalTrocoValueInput;
-                }
-            }
-        }
-    }
-
-
+    // Rola para o primeiro elemento inválido se houver
     if (shouldHighlight && firstInvalidElement) {
         firstInvalidElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -1364,59 +1336,36 @@ function validateOrder(shouldHighlight = true, checkPaymentMethod = true) {
 
 // --- FUNÇÃO FINAL DE CONFIRMAÇÃO E ENVIO DO PEDIDO (WHATSAPP) ---
 async function confirmAllOrders() {
-    // --- 1. VALIDAÇÃO (continua a mesma) ---
-    document.querySelectorAll('.highlight-error').forEach(el => el.classList.remove('highlight-error'));
-    if(modalConfirmAllBtn) modalConfirmAllBtn.classList.remove('shake-animation');
-    
-    let errorMessage = "";
-    let fieldToHighlightId = "";
-
-    if (cart.length === 0) {
-        errorMessage = "Seu carrinho está vazio! Adicione itens antes de enviar.";
-        closeCartModal();
-        showCustomAlert(errorMessage, 'error');
+    // 1. Validação inicial comum (nome, entrega)
+    let isValidCommon = validateOrder(true);
+    if (!isValidCommon) {
+        showCustomAlert("Por favor, preencha seu nome e a opção de entrega antes de enviar o pedido.", "error");
+        if (modalConfirmWhatsappBtn) shakeButton(modalConfirmWhatsappBtn);
         return;
-    } else if (!modalCustomerNameInput.value.trim()) {
-        errorMessage = "Por favor, digite seu nome para continuar.";
-        fieldToHighlightId = 'modal-customer-name';
-    } else if (!modalDeliveryCheckbox.checked && !modalPickupCheckbox.checked) {
-        errorMessage = "Por favor, selecione uma opção de entrega ou retirada.";
-        fieldToHighlightId = 'modal-delivery-options-wrapper';
-    } else if (modalDeliveryCheckbox.checked && !modalDeliveryAddressInput.value.trim()) {
-        errorMessage = "Por favor, preencha o endereço de entrega.";
-        fieldToHighlightId = 'modal-delivery-address';
-    } else {
-        const selectedPaymentRadio = document.querySelector('input[name="modal-payment"]:checked');
-        if (!selectedPaymentRadio) {
-            errorMessage = "Por favor, selecione uma forma de pagamento.";
-            fieldToHighlightId = 'modal-payment-choice-section';
-        } else if (selectedPaymentRadio.value === 'whatsapp-especie' && modalTrocoValueInput.value.trim() !== '') {
-            const totalPedidoElement = document.getElementById("modal-total-price");
-            let totalPedido = parseFloat(totalPedidoElement.innerText.replace('R$ ', '').replace(',', '.'));
-            const trocoPara = parseFloat(modalTrocoValueInput.value.replace(',', '.'));
-            if (isNaN(trocoPara) || trocoPara < totalPedido) {
-                errorMessage = "O valor do troco não pode ser menor que o total do pedido.";
-                fieldToHighlightId = 'modal-troco-value';
-            }
-        } else if (selectedPaymentRadio.value.startsWith('online-')) { // Bloqueia pagamento online aqui
-            errorMessage = "Para pagamentos online, utilize o botão 'Continuar para Pagamento Online'.";
-            fieldToHighlightId = 'modal-online-payment-btn'; // Destaca o botão correto
-            // Se for online, não prossegue com o WhatsApp
-            showCustomAlert(errorMessage, 'warning');
-            if (modalConfirmAllBtn) shakeButton(modalConfirmAllBtn);
-            if (fieldToHighlightId) highlightField(fieldToHighlightId);
+    }
+
+    // 2. Validação específica para o método de pagamento WhatsApp
+    const selectedPaymentRadio = document.querySelector('input[name="modal-payment"]:checked');
+    if (!selectedPaymentRadio || !selectedPaymentRadio.value.startsWith('whatsapp-')) {
+        showCustomAlert("Por favor, selecione uma forma de pagamento na seção 'Pagar pelo WhatsApp'.", "error");
+        if (whatsappPaymentSection) highlightField('whatsapp-payment-section');
+        if (modalConfirmWhatsappBtn) shakeButton(modalConfirmWhatsappBtn);
+        return;
+    }
+
+    if (selectedPaymentRadio.value === 'whatsapp-especie' && modalTrocoValueInput.value.trim() !== '') {
+        const totalPedidoElement = document.getElementById("modal-total-price");
+        let totalPedido = parseFloat(totalPedidoElement.innerText.replace('R$ ', '').replace(',', '.'));
+        const trocoPara = parseFloat(modalTrocoValueInput.value.replace(',', '.'));
+        if (isNaN(trocoPara) || trocoPara < totalPedido) {
+            showCustomAlert("O valor do troco não pode ser menor que o total do pedido.", "error");
+            highlightField('modal-troco-value');
+            if (modalConfirmWhatsappBtn) shakeButton(modalConfirmWhatsappBtn);
             return;
         }
     }
 
-    if (errorMessage) {
-        showCustomAlert(errorMessage, 'error');
-        if (modalConfirmAllBtn) shakeButton(modalConfirmAllBtn);
-        if (fieldToHighlightId) highlightField(fieldToHighlightId);
-        return;
-    }
-
-    // --- 2. PREPARAÇÃO DA MENSAGEM PARA O WHATSAPP (Lógica Nova) ---
+    // --- 3. PREPARAÇÃO DA MENSAGEM PARA O WHATSAPP ---
     const phoneNumber = "5511999999999"; // <-- IMPORTANTE: Troque pelo seu número com código do país (55) e DDD.
 
     let totalPedido = 0;
@@ -1453,18 +1402,14 @@ async function confirmAllOrders() {
         totalPedido += 2; // Adiciona a taxa de entrega
     }
 
-    const selectedPaymentRadio = document.querySelector('input[name="modal-payment"]:checked');
-    // Pegar o texto do label associado ao rádio button
     const paymentMethodLabel = document.querySelector(`label[data-method="${selectedPaymentRadio.value}"] div`).textContent;
-    const paymentMethod = paymentMethodLabel.includes('(WhatsApp)') ? paymentMethodLabel : `Pagamento via WhatsApp (${paymentMethodLabel})`; // Ajusta o texto para coerência
-
 
     mensagem += `\n*Tipo de Entrega:* ${deliveryType}\n`;
     if (deliveryType === 'Entrega') {
         mensagem += `*Endereço:* ${modalDeliveryAddressInput.value.trim()}\n`;
     }
 
-    mensagem += `*Forma de Pagamento:* ${paymentMethod}\n`;
+    mensagem += `*Forma de Pagamento:* WhatsApp (${paymentMethodLabel})\n`;
 
     const trocoValue = modalTrocoValueInput.value.trim();
     if (selectedPaymentRadio.value === 'whatsapp-especie' && trocoValue) {
@@ -1473,15 +1418,15 @@ async function confirmAllOrders() {
 
     mensagem += `\n*TOTAL DO PEDIDO (com taxa): R$ ${totalPedido.toFixed(2).replace('.', ',')}*`;
 
-    // --- 3. ABRIR O WHATSAPP (Lógica Nova) ---
+    // --- 4. ABRIR O WHATSAPP ---
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(mensagem)}`;
     
-    // Abre o WhatsApp em uma nova aba
     window.open(whatsappUrl, '_blank');
     
-    // Limpa o carrinho e fecha o modal na página original
+    // Limpa o carrinho e fecha o modal
     clearCart();
 }
+
 // --- FUNÇÃO PARA LIMPAR TUDO ---
 function clearCart() {
     cart.length = 0;
@@ -1489,8 +1434,6 @@ function clearCart() {
 
     if (modalCustomerNameInput) modalCustomerNameInput.value = '';
     if (modalDeliveryAddressInput) modalDeliveryAddressInput.value = '';
-    // if (document.getElementById('modal-customer-email')) document.getElementById('modal-customer-email').value = ''; // Removido
-    // if (document.getElementById('modal-customer-phone')) document.getElementById('modal-customer-phone').value = ''; // Removido
     if (modalTrocoValueInput) modalTrocoValueInput.value = '';
     
     if (modalDeliveryCheckbox) modalDeliveryCheckbox.checked = false;
@@ -1499,26 +1442,29 @@ function clearCart() {
 
     if (modalDeliveryAddressSection) modalDeliveryAddressSection.style.display = 'none';
     if (modalTrocoSection) modalTrocoSection.style.display = 'none';
-    // if (modalEmailPhoneFields) modalEmailPhoneFields.style.display = 'none'; // Removido
 
     removeHighlightField('modal-customer-name');
     removeHighlightField('modal-delivery-options-wrapper');
     removeHighlightField('modal-delivery-address');
-    removeHighlightField('modal-payment-choice-section');
+    if (onlinePaymentSection) removeHighlightField('online-payment-section');
+    if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value');
-    if (modalConfirmAllBtn) modalConfirmAllBtn.classList.remove('shake-animation');
-
-    // Reseta a UI de pagamento online
-    const modalCartActions = document.querySelector('.modal-cart-actions');
-    if (modalCartActions) modalCartActions.style.display = 'flex';
+    
+    // Reseta o estado e visibilidade das seções de pagamento
+    if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+    if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+    if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
     const paymentBricksContainer = document.getElementById('payment-bricks-container');
     if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
-    if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none'; // Esconde a seção Pix
 
-    const payButton = document.getElementById('modal-online-payment-btn');
-    if(payButton) {
-        payButton.textContent = 'Continuar para Pagamento Online';
-        payButton.disabled = false;
+    // Reseta o texto e estado dos botões de ação
+    if (modalOnlinePaymentBtn) {
+        modalOnlinePaymentBtn.textContent = 'Pagar Online Agora';
+        modalOnlinePaymentBtn.disabled = true; 
+    }
+    if (modalConfirmWhatsappBtn) {
+        modalConfirmWhatsappBtn.textContent = 'Enviar Pedido via WhatsApp';
+        modalConfirmWhatsappBtn.disabled = true; 
     }
     
     updateTotal();
@@ -1599,8 +1545,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTotal(); 
         updateCartCount();
         validateOrder(false);
-        closeCartModal();
-        closeComplementsModal();
+        closeCartModal(); // Chama closeCartModal para garantir que a UI inicial está correta
 
         renderNewHomePage(); // Chama a nova página inicial ao carregar
 
@@ -1623,19 +1568,31 @@ document.addEventListener('DOMContentLoaded', () => {
         modalDeliveryAddressInput?.addEventListener('input', () => { removeHighlightField('modal-delivery-address'); updateUI(); });
         modalTrocoValueInput?.addEventListener('input', () => { removeHighlightField('modal-troco-value'); updateUI(); });
         
+        // Listener para os clicks nos cards de pagamento
         document.querySelectorAll('#cart-modal-content .payment-card').forEach(card => {
             card.addEventListener('click', function() {
                 const radio = this.querySelector('input[name="modal-payment"]');
-                if (radio && !radio.checked) {
-                    radio.checked = true;
-                    radio.dispatchEvent(new Event('change'));
-                } else if (radio && radio.checked) {
-                    updatePaymentSelectionVisual();
-                    validateOrder(false);
+                if (radio) {
+                    // Se o rádio não estiver marcado, marque e dispare o change
+                    if (!radio.checked) {
+                        radio.checked = true;
+                        radio.dispatchEvent(new Event('change'));
+                    } else {
+                        // Se já estiver marcado, apenas atualiza o visual e valida
+                        updatePaymentSelectionVisual();
+                        validateOrder(false);
+                    }
                 }
-                removeHighlightField('modal-payment-choice-section'); 
             });
         });
+
+        // Certifica que o evento 'change' nos rádio buttons também é capturado diretamente
+        document.querySelectorAll('input[name="modal-payment"]').forEach(radio => {
+            radio.addEventListener('change', (event) => {
+                selectPaymentMethod(event.target.value);
+            });
+        });
+
 
         document.querySelectorAll('.bottom-nav .nav-item').forEach(item => {
             item.addEventListener('click', function() {
