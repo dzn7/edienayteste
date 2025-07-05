@@ -398,23 +398,29 @@ const pixQrCodeImage = document.getElementById('pixQrCodeImage');
 const pixCopiaEColaInput = document.getElementById('pixCopiaEColaInput');
 const copyPixCodeBtn = document.getElementById('copyPixCodeBtn');
 
+// Novos campos para nome e email do comprador online
+const modalBuyerInfoSection = document.getElementById('modal-buyer-info-section');
+const modalBuyerNameInput = document.getElementById('modal-buyer-name');
+const modalBuyerEmailInput = document.getElementById('modal-buyer-email');
+
 
 // =========================================================
 // FUNÇÕES DE PAGAMENTO ONLINE (MERCADO PAGO)
 // =========================================================
 
 async function initiateOnlinePayment() {
-    // Esconde as seções de escolha de pagamento
+    // Esconde as seções de escolha de pagamento e os campos de comprador online
     if (onlinePaymentSection) onlinePaymentSection.style.display = 'none';
     if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'none';
-    
+    if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'none'; // Esconde a seção de dados do comprador
+
     // Esconde as seções de detalhes de pagamento online (Pix e Bricks)
     if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
     const paymentBricksContainer = document.getElementById('payment-bricks-container');
     if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
 
-    // 1. Valida os campos obrigatórios (nome, entrega)
-    const isValid = validateOrder(true); // validateOrder agora só checa nome e entrega
+    // 1. Valida os campos obrigatórios (nome do pedido, entrega)
+    const isValid = validateOrder(true); 
     if (!isValid) {
         showCustomAlert("Por favor, preencha seu nome e a opção de entrega antes de continuar.", "error");
         // Reverte a visibilidade dos elementos se a validação falhar
@@ -423,27 +429,42 @@ async function initiateOnlinePayment() {
         return;
     }
 
-    // Valida se um método de pagamento ONLINE foi selecionado
+    // 2. Valida se um método de pagamento ONLINE foi selecionado
     const selectedOnlinePaymentMethod = document.querySelector('input[name="modal-payment"]:checked')?.value;
     if (!selectedOnlinePaymentMethod || !selectedOnlinePaymentMethod.startsWith('online-')) {
         showCustomAlert("Por favor, selecione uma opção de pagamento online (Pix ou Cartão).", "error");
+        if (onlinePaymentSection) highlightField('online-payment-section'); // Destaca a seção correta
+        if (modalOnlinePaymentBtn) shakeButton(modalOnlinePaymentBtn);
+        // Reverte a visibilidade dos elementos
         if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
         if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
-        if (modalOnlinePaymentBtn) shakeButton(modalOnlinePaymentBtn);
+        return;
+    }
+
+    // 3. Valida os novos campos de nome e e-mail do comprador online
+    const buyerName = modalBuyerNameInput?.value.trim();
+    const buyerEmail = modalBuyerEmailInput?.value.trim();
+
+    if (!buyerName || !buyerEmail || !isValidEmail(buyerEmail)) {
+        showCustomAlert("Por favor, preencha o nome e um e-mail válido para o pagamento online.", "error");
+        if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'block'; // Mostra a seção de dados do comprador
+        if (!buyerName) highlightField('modal-buyer-name');
+        if (!buyerEmail || !isValidEmail(buyerEmail)) highlightField('modal-buyer-email');
+        // Reverte a visibilidade dos elementos
+        if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
+        if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
         return;
     }
 
 
-    // 2. Mostra uma mensagem de "carregando"
+    // 4. Mostra uma mensagem de "carregando"
     if (modalOnlinePaymentBtn) {
         modalOnlinePaymentBtn.textContent = 'Aguarde, preparando pagamento...';
         modalOnlinePaymentBtn.disabled = true;
     }
 
     const totalValue = parseFloat(document.getElementById('modal-total-price').innerText.replace('R$ ', '').replace(',', '.')) || 0;
-    const customerName = modalCustomerNameInput.value.trim();
-    const customerEmail = "test@test.com"; // Considerar adicionar um campo de email real no HTML se necessário
-
+    
     try {
         if (selectedOnlinePaymentMethod === 'online-pix') {
             console.log("Iniciando pagamento Pix online...");
@@ -451,8 +472,8 @@ async function initiateOnlinePayment() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    customerName: customerName,
-                    customerEmail: customerEmail,
+                    customerName: buyerName, // Usa o nome do comprador online
+                    customerEmail: buyerEmail, // Usa o email do comprador online
                     items: cart.map(item => {
                         const product = getProductById(item.productId);
                         if (!product) return null;
@@ -506,12 +527,14 @@ async function initiateOnlinePayment() {
             // Reverte a visibilidade dos elementos se o fluxo não for implementado
             if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
             if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+            if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'block'; // Mostra a seção de dados do comprador
 
         } else {
             // Este bloco não deve ser atingido se a validação acima funcionar
             showCustomAlert("Por favor, selecione um método de pagamento online (Pix ou Cartão).", "error");
             if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
             if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+            if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'block'; // Mostra a seção de dados do comprador
         }
 
     } catch (error) {
@@ -520,6 +543,7 @@ async function initiateOnlinePayment() {
         // Reverte a visibilidade dos elementos se houver erro
         if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
         if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+        if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'block'; // Mostra a seção de dados do comprador
     } finally {
         if (modalOnlinePaymentBtn) {
             modalOnlinePaymentBtn.textContent = 'Pagar Online Agora';
@@ -529,6 +553,13 @@ async function initiateOnlinePayment() {
         }
     }
 }
+
+// Função para validar formato de e-mail básico
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
 
 // Função para renderizar APENAS o Brick de Cartão de Crédito (requer preferenceId do backend)
 async function renderCardPaymentBrick(amount, preferenceId) {
@@ -542,7 +573,7 @@ async function renderCardPaymentBrick(amount, preferenceId) {
     const cardSettings = {
         initialization: {
             amount: amount,
-            preferenceId: preferenceId, // Esta preferenceId deve vir do backend
+            preferenceId: preferenceId,
         },
         customization: {
             visual: { style: { theme: 'dark' } },
@@ -680,6 +711,7 @@ function openCartModal() {
     // Mostra as seções de escolha de pagamento e desabilita os botões de ação inicialmente
     if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
     if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+    if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'none'; // Esconde os campos de comprador online inicialmente
     
     if (modalOnlinePaymentBtn) modalOnlinePaymentBtn.disabled = true;
     if (modalConfirmWhatsappBtn) modalConfirmWhatsappBtn.disabled = true;
@@ -699,6 +731,7 @@ function closeCartModal() {
     // Assegura que as seções de pagamento estejam visíveis para a próxima abertura e resetadas
     if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
     if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
+    if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'none'; // Esconde os campos de comprador online ao fechar
     
     if (modalOnlinePaymentBtn) modalOnlinePaymentBtn.disabled = true;
     if (modalConfirmWhatsappBtn) modalConfirmWhatsappBtn.disabled = true;
@@ -1271,14 +1304,21 @@ function selectPaymentMethod(method) {
         modalTrocoSection.style.display = method === "whatsapp-especie" ? "block" : "none";
     }
 
+    // Gerencia a visibilidade da seção de dados do comprador online
+    if (modalBuyerInfoSection) {
+        modalBuyerInfoSection.style.display = method.startsWith('online-') ? "block" : "none";
+    }
+
     // Habilita/desabilita os botões de ação com base na seleção
     if (modalOnlinePaymentBtn) modalOnlinePaymentBtn.disabled = !method.startsWith('online-');
     if (modalConfirmWhatsappBtn) modalConfirmWhatsappBtn.disabled = !method.startsWith('whatsapp-');
 
-    // Remove qualquer destaque de erro das seções de pagamento
+    // Remove qualquer destaque de erro das seções de pagamento e campos
     if (onlinePaymentSection) removeHighlightField('online-payment-section');
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value'); 
+    removeHighlightField('modal-buyer-name');
+    removeHighlightField('modal-buyer-email');
 
     updateTotal();
     validateOrder(false); 
@@ -1292,14 +1332,13 @@ function validateOrder(shouldHighlight = true) {
     // Limpa destaques de erro anteriores
     if (shouldHighlight) {
         document.querySelectorAll('.highlight-error').forEach(el => el.classList.remove('highlight-error'));
-        // Não agita botões aqui, isso é feito nas funções específicas de ação
     }
     
     if (cart.length === 0) {
         isValid = false;
-        // Nenhum elemento para destacar para carrinho vazio, o alerta já faz isso
     }
 
+    // O campo "Seu nome" (modal-customer-name) é obrigatório para todos os pedidos
     if (!modalCustomerNameInput?.value.trim()) {
         isValid = false;
         if (shouldHighlight) {
@@ -1370,7 +1409,7 @@ async function confirmAllOrders() {
 
     let totalPedido = 0;
     let mensagem = `Olá! Gostaria de fazer um novo pedido:\n\n`;
-    mensagem += `*Cliente:* ${modalCustomerNameInput.value.trim()}\n\n`;
+    mensagem += `*Cliente:* ${modalCustomerNameInput.value.trim()}\n\n`; // Nome do cliente principal
     mensagem += `*ITENS DO PEDIDO:*\n`;
 
     cart.forEach(item => {
@@ -1435,6 +1474,9 @@ function clearCart() {
     if (modalCustomerNameInput) modalCustomerNameInput.value = '';
     if (modalDeliveryAddressInput) modalDeliveryAddressInput.value = '';
     if (modalTrocoValueInput) modalTrocoValueInput.value = '';
+    // Limpa os novos campos de comprador online
+    if (modalBuyerNameInput) modalBuyerNameInput.value = '';
+    if (modalBuyerEmailInput) modalBuyerEmailInput.value = '';
     
     if (modalDeliveryCheckbox) modalDeliveryCheckbox.checked = false;
     if (modalPickupCheckbox) modalPickupCheckbox.checked = false;
@@ -1442,6 +1484,7 @@ function clearCart() {
 
     if (modalDeliveryAddressSection) modalDeliveryAddressSection.style.display = 'none';
     if (modalTrocoSection) modalTrocoSection.style.display = 'none';
+    if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'none'; // Esconde a seção de dados do comprador
 
     removeHighlightField('modal-customer-name');
     removeHighlightField('modal-delivery-options-wrapper');
@@ -1449,6 +1492,8 @@ function clearCart() {
     if (onlinePaymentSection) removeHighlightField('online-payment-section');
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value');
+    removeHighlightField('modal-buyer-name');
+    removeHighlightField('modal-buyer-email');
     
     // Reseta o estado e visibilidade das seções de pagamento
     if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
@@ -1567,8 +1612,11 @@ document.addEventListener('DOMContentLoaded', () => {
         modalCustomerNameInput?.addEventListener('input', () => { removeHighlightField('modal-customer-name'); updateUI(); });
         modalDeliveryAddressInput?.addEventListener('input', () => { removeHighlightField('modal-delivery-address'); updateUI(); });
         modalTrocoValueInput?.addEventListener('input', () => { removeHighlightField('modal-troco-value'); updateUI(); });
+        // Novos listeners para nome e email do comprador online
+        modalBuyerNameInput?.addEventListener('input', () => { removeHighlightField('modal-buyer-name'); updateUI(); });
+        modalBuyerEmailInput?.addEventListener('input', () => { removeHighlightField('modal-buyer-email'); updateUI(); });
         
-        // Listener para os clicks nos cards de pagamento
+        // Listener para os clicks nos cards de pagamento (garante que o rádio é marcado e a função é chamada)
         document.querySelectorAll('#cart-modal-content .payment-card').forEach(card => {
             card.addEventListener('click', function() {
                 const radio = this.querySelector('input[name="modal-payment"]');
