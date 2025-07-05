@@ -9,8 +9,7 @@ const mp = new MercadoPago(MERCADO_PAGO_PUBLIC_KEY);
 
 // Variável para guardar a instância dos bricks
 let cardPaymentBrickController;
-let pixPaymentBrickController;
-
+// Não precisamos mais do pixPaymentBrickController se o Pix for exibido manualmente
 
 // Estrutura de Produtos por Categoria
 const allProducts = {
@@ -384,7 +383,7 @@ const modalDeliveryCheckbox = document.getElementById('modal-delivery-checkbox')
 const modalPickupCheckbox = document.getElementById('modal-pickup-checkbox');
 const modalDeliveryAddressSection = document.getElementById('modal-delivery-address-section');
 const modalDeliveryAddressInput = document.getElementById('modal-delivery-address');
-const modalEmailPhoneFields = document.getElementById('modal-email-phone-fields');
+// const modalEmailPhoneFields = document.getElementById('modal-email-phone-fields'); // Removido, não é usado no fluxo atual
 
 const modalConfirmAllBtn = document.getElementById('modal-confirm-all-btn');
 
@@ -392,83 +391,175 @@ const modalPaymentChoiceSection = document.getElementById('modal-payment-choice-
 const modalTrocoSection = document.getElementById('modal-troco-section');
 const modalTrocoValueInput = document.getElementById('modal-troco-value');
 
+// Novos elementos do HTML para o Pix
+const pixPaymentDetailsDiv = document.getElementById('pixPaymentDetails');
+const pixQrCodeImage = document.getElementById('pixQrCodeImage');
+const pixCopiaEColaInput = document.getElementById('pixCopiaEColaInput');
+const copyPixCodeBtn = document.getElementById('copyPixCodeBtn');
+
 
 // =========================================================
 // FUNÇÕES DE PAGAMENTO ONLINE (MERCADO PAGO)
 // =========================================================
 
-// Função chamada pelo novo botão "Pagar Online"
 async function initiateOnlinePayment() {
-    // 1. Esconde a seção de pagamento manual (WhatsApp)
-    if (modalPaymentChoiceSection) {
-        modalPaymentChoiceSection.style.display = 'none';
-    }
+    // Esconde a seção de escolha de pagamento e os botões de ação do carrinho
+    if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'none';
+    const modalCartActions = document.querySelector('.modal-cart-actions');
+    if (modalCartActions) modalCartActions.style.display = 'none';
 
-    // 2. Valida se o formulário do carrinho está preenchido (nome, endereço, etc.)
+    // Esconde as seções de detalhes de pagamento online (Pix e Cartão) inicialmente
+    if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
+    const paymentBricksContainer = document.getElementById('payment-bricks-container');
+    if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
+
+    // 1. Valida se o formulário do carrinho está preenchido (nome, endereço, etc.)
     const isValid = validateOrder(true, false); // Valida sem checar os botões de rádio de pagamento manual
     if (!isValid) {
-        showCustomAlert("Por favor, preencha seu nome e a opção de entrega antes de pagar.", "error");
+        showCustomAlert("Por favor, preencha seu nome e a opção de entrega antes de continuar.", "error");
+        // Reverte a visibilidade dos elementos se a validação falhar
+        if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
+        if (modalCartActions) modalCartActions.style.display = 'flex';
         return;
     }
 
-    // 3. Mostra uma mensagem de "carregando"
+    // 2. Mostra uma mensagem de "carregando"
     const payButton = document.getElementById('modal-online-payment-btn');
-    payButton.textContent = 'Aguarde, preparando pagamento...';
-    payButton.disabled = true;
+    if (payButton) {
+        payButton.textContent = 'Aguarde, preparando pagamento...';
+        payButton.disabled = true;
+    }
+
+    const selectedOnlinePaymentMethod = document.querySelector('input[name="modal-payment"]:checked')?.value;
+    const totalValue = parseFloat(document.getElementById('modal-total-price').innerText.replace('R$ ', '').replace(',', '.')) || 0;
+    const customerName = modalCustomerNameInput.value.trim();
+    const customerEmail = "test@test.com"; // Considerar adicionar um campo de email real no HTML se necessário
 
     try {
-        // 4. Renderiza os formulários (bricks) do Mercado Pago
-        await renderMercadoPagoBricks();
+        if (selectedOnlinePaymentMethod === 'online-pix') {
+            console.log("Iniciando pagamento Pix online...");
+            const response = await fetch(`${BACKEND_URL}/create-mercadopago-pix`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    customerName: customerName,
+                    customerEmail: customerEmail,
+                    items: cart.map(item => {
+                        const product = getProductById(item.productId);
+                        if (!product) return null;
+                        let itemTotal = product.price;
+                        const complementNames = item.complements.map(id => {
+                            const comp = complements[id];
+                            if (comp) {
+                                itemTotal += comp.price;
+                                return comp.name;
+                            }
+                            return '';
+                        }).filter(Boolean);
+                        return {
+                            title: product.name + (complementNames.length > 0 ? ` (${complementNames.join(', ')})` : ''),
+                            quantity: 1,
+                            unit_price: parseFloat(itemTotal.toFixed(2))
+                        };
+                    }).filter(Boolean),
+                    total: totalValue
+                })
+            });
 
-        // 5. Esconde os botões de ação e mostra o contêiner dos bricks
-        document.querySelector('.modal-cart-actions').style.display = 'none';
-        document.getElementById('payment-bricks-container').style.display = 'block';
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error("Erro do backend ao criar Pix:", errorData);
+                throw new Error(`Falha ao criar pagamento Pix: ${errorData.message || response.statusText}`);
+            }
+
+            const pixPaymentData = await response.json();
+            
+            // Exibir os detalhes do Pix
+            if (pixPaymentDetailsDiv && pixQrCodeImage && pixCopiaEColaInput && copyPixCodeBtn) {
+                pixQrCodeImage.src = pixPaymentData.qrCodeImage;
+                pixCopiaEColaInput.value = pixPaymentData.pixCopiaECola;
+                pixPaymentDetailsDiv.style.display = 'block';
+
+                copyPixCodeBtn.onclick = () => {
+                    pixCopiaEColaInput.select();
+                    navigator.clipboard.writeText(pixCopiaEColaInput.value)
+                        .then(() => { showCustomAlert('Código Pix copiado com sucesso!', 'success'); })
+                        .catch(err => { console.error('Erro ao copiar Pix:', err); showCustomAlert('Falha ao copiar o código Pix.', 'error'); });
+                };
+            }
+            showCustomAlert("QR Code Pix gerado com sucesso!", "success");
+
+        } else if (selectedOnlinePaymentMethod === 'online-card') {
+            console.log("Pagamento com Cartão online selecionado. NOTA: O backend precisa fornecer uma 'preferenceId' para o Brick de Cartão.");
+            // *** IMPORTANTE: LEIA ESTA SEÇÃO ***
+            // O endpoint '/create-mercadopago-card' do seu server.js está configurado
+            // para RECEBER dados tokenizados do cartão e processar o pagamento diretamente.
+            // O 'cardPayment' Brick do Mercado Pago, por padrão, precisa de um 'preferenceId'
+            // para ser inicializado. Isso significa que você precisaria de um ENDPOINT NO BACKEND
+            // que apenas CRIE UMA PREFERÊNCIA (sem processar o pagamento ainda) e retorne o ID dela.
+            // Se você quer usar o Brick, seu backend precisaria de uma rota como '/create_preference'
+            // que gerasse uma preferência e retornasse o ID dela para o frontend.
+            // Por enquanto, esta funcionalidade está apenas com um alerta de aviso.
+
+            showCustomAlert("O pagamento com Cartão Online está em desenvolvimento e requer configuração adicional no backend para usar os Bricks. Por favor, utilize o Pix Online ou as opções via WhatsApp.", "warning");
+            
+            // Reverte a visibilidade dos elementos se o fluxo não for implementado
+            if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
+            if (modalCartActions) modalCartActions.style.display = 'flex';
+
+            // Exemplo de como você CHAMARIA o renderCardPaymentBrick SE seu backend
+            // tivesse uma rota que retornasse uma preferenceId para o cartão:
+            /*
+            const responseCardPreference = await fetch(`${BACKEND_URL}/create-preference-for-card`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: cartItems, total: totalValue, payerEmail: customerEmail })
+            });
+            if (!responseCardPreference.ok) {
+                throw new Error("Falha ao obter preferência para pagamento com cartão.");
+            }
+            const cardPreference = await responseCardPreference.json();
+            if (cardPreference.id) {
+                await renderCardPaymentBrick(totalValue, cardPreference.id);
+                if (paymentBricksContainer) paymentBricksContainer.style.display = 'block';
+            } else {
+                throw new Error("ID da preferência de cartão não foi recebido do backend.");
+            }
+            */
+
+        } else {
+            showCustomAlert("Por favor, selecione um método de pagamento online (Pix ou Cartão).", "error");
+            // Reverte a visibilidade dos elementos
+            if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
+            if (modalCartActions) modalCartActions.style.display = 'flex';
+        }
 
     } catch (error) {
         console.error("Erro ao iniciar pagamento online:", error);
-        showCustomAlert("Não foi possível iniciar o pagamento. Verifique sua conexão e tente novamente.", "error");
-        payButton.textContent = 'Pagar Online (Pix ou Cartão)';
-        payButton.disabled = false;
+        showCustomAlert(`Erro ao iniciar pagamento online: ${error.message}`, "error");
+        // Reverte a visibilidade dos elementos se houver erro
+        if (modalPaymentChoiceSection) modalPaymentChoiceSection.style.display = 'block';
+        if (modalCartActions) modalCartActions.style.display = 'flex';
+    } finally {
+        if (payButton) {
+            payButton.textContent = 'Continuar para Pagamento Online';
+            payButton.disabled = false;
+        }
     }
 }
 
-// Função principal que se comunica com o backend e renderiza os bricks
-async function renderMercadoPagoBricks() {
-    // Garante que bricks antigos sejam destruídos antes de criar novos
-    if (cardPaymentBrickController) await cardPaymentBrickController.unmount();
-    if (pixPaymentBrickController) await pixPaymentBrickController.unmount();
-
-    // Pega o valor total do pedido
-    const totalValue = parseFloat(document.getElementById('modal-total-price').innerText.replace('R$ ', '').replace(',', '.')) || 0;
-
-    // 1. Envia o valor para o seu backend criar uma preferência de pagamento
-    const response = await fetch(`${BACKEND_URL}/create-mercadopago-pix`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            title: "Pedido de Edienai Lanches",
-            quantity: 1,
-            unit_price: totalValue
-        })
-    });
-
-    if (!response.ok) {
-        throw new Error("Falha ao comunicar com o servidor para criar a preferência.");
+// Função para renderizar APENAS o Brick de Cartão de Crédito
+async function renderCardPaymentBrick(amount, preferenceId) {
+    if (cardPaymentBrickController) {
+        await cardPaymentBrickController.unmount();
+        cardPaymentBrickController = null;
     }
 
-    const preference = await response.json();
-    const preferenceId = preference.id;
-
-    if (!preferenceId) {
-        throw new Error("ID da preferência não foi recebido do backend.");
-    }
-    
     const bricksBuilder = mp.bricks();
 
-    // 2. Configura e renderiza o Brick de Cartão de Crédito
     const cardSettings = {
         initialization: {
-            amount: totalValue,
+            amount: amount,
             preferenceId: preferenceId,
         },
         customization: {
@@ -477,41 +568,39 @@ async function renderMercadoPagoBricks() {
         callbacks: {
             onSubmit: async (cardFormData) => {
                 try {
-                    const paymentResponse = await fetch(`${BACKEND_URL}/pagamento`, {
+                    // Esta chamada é para a rota /create-mercadopago-card do seu backend
+                    const paymentResponse = await fetch(`${BACKEND_URL}/create-mercadopago-card`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(cardFormData)
                     });
                     const data = await paymentResponse.json();
                     
-                    if (data.body && data.body.status === 'approved') {
+                    if (data.status === 'approved' || (data.body && data.body.status === 'approved')) {
                         showCustomAlert("Pagamento Aprovado! Obrigado pela sua compra.", "success");
                         clearCart();
-                        setTimeout(() => closeCartModal(), 2000); // Fecha o modal após o sucesso
+                        setTimeout(() => closeCartModal(), 2000); 
                     } else {
-                        const errorMessage = data.body.error || "Pagamento recusado.";
+                        const errorMessage = data.message || (data.body && data.body.message) || "Pagamento recusado.";
                         showCustomAlert(`O pagamento foi recusado. Motivo: ${errorMessage}`, "error");
                     }
                 } catch (error) {
-                    showCustomAlert("Ocorreu um erro ao processar seu pagamento. Tente novamente.", "error");
+                    console.error("Erro ao processar pagamento com cartão no frontend:", error);
+                    showCustomAlert("Ocorreu um erro ao processar seu pagamento com cartão. Tente novamente.", "error");
                 }
             },
-            onError: (error) => console.error(error),
+            onError: (error) => {
+                console.error("Erro no Card Payment Brick:", error);
+                showCustomAlert("Erro no formulário do cartão. Verifique os dados.", "error");
+            },
         },
     };
-    cardPaymentBrickController = await bricksBuilder.create('cardPayment', 'cardPaymentBrick_container', cardSettings);
-
-    // 3. Configura e renderiza o Brick de PIX
-    const pixSettings = {
-        initialization: {
-            amount: totalValue,
-            preferenceId: preferenceId,
-        },
-        customization: {
-            texts: { valueProp: 'instant_payment' },
-        },
-    };
-    pixPaymentBrickController = await bricksBuilder.create('pix', 'pixPaymentBrick_container', pixSettings);
+    // Verifica se o container existe antes de criar o brick
+    if (document.getElementById('cardPaymentBrick_container')) {
+        cardPaymentBrickController = await bricksBuilder.create('cardPayment', 'cardPaymentBrick_container', cardSettings);
+    } else {
+        console.error("Elemento 'cardPaymentBrick_container' não encontrado para renderizar o Brick de Cartão.");
+    }
 }
 
 
@@ -542,9 +631,6 @@ function closeCustomAlert() {
         toggleModal('custom-alert-overlay', false); 
     }
 }
-
-// ... (Restante do seu código `simple-script.js` continua aqui, sem alterações)
-// ... (Copie e cole as funções restantes a partir daqui)
 
 // =========================================================
 // ANIMAÇÕES DE DESTAQUE E TREMOR
@@ -608,12 +694,17 @@ function openCartModal() {
     console.log("Abrindo modal do carrinho...");
     renderModalCart();
 
-    // Mostra/esconde as opções de pagamento corretas ao abrir
-    document.querySelector('.modal-cart-actions').style.display = 'flex';
-    document.getElementById('payment-bricks-container').style.display = 'none';
+    // Garante que as opções de pagamento original e botões de ação estejam visíveis ao abrir
+    const modalCartActions = document.querySelector('.modal-cart-actions');
+    if (modalCartActions) modalCartActions.style.display = 'flex';
     if(modalPaymentChoiceSection) {
         modalPaymentChoiceSection.style.display = 'block';
     }
+    // Esconde as seções de pagamento online (Pix e Bricks)
+    if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
+    const paymentBricksContainer = document.getElementById('payment-bricks-container');
+    if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
+
 
     toggleModal('cart-modal-overlay', true);
 }
@@ -621,6 +712,15 @@ function openCartModal() {
 function closeCartModal() {
     console.log("Fechando modal do carrinho...");
     toggleModal('cart-modal-overlay', false);
+    // Assegura que as seções de pagamento estejam visíveis para a próxima abertura
+    const modalCartActions = document.querySelector('.modal-cart-actions');
+    if (modalCartActions) modalCartActions.style.display = 'flex';
+    if(modalPaymentChoiceSection) {
+        modalPaymentChoiceSection.style.display = 'block';
+    }
+    if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none';
+    const paymentBricksContainer = document.getElementById('payment-bricks-container');
+    if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
 }
 
 // --- FUNÇÕES DO MODAL DE CATEGORIAS REMOVIDAS ---
@@ -1176,17 +1276,10 @@ function selectPaymentMethod(method) {
         modalTrocoSection.style.display = method === "whatsapp-especie" ? "block" : "none";
     }
 
-    if (modalEmailPhoneFields) {
-        if (method === 'online-pix') { 
-            modalEmailPhoneFields.style.display = 'block';
-        } else {
-            modalEmailPhoneFields.style.display = 'none';
-            const modalCustomerEmailInput = document.getElementById('modal-customer-email');
-            const modalCustomerPhoneInput = document.getElementById('modal-customer-phone');
-            if (modalCustomerEmailInput) modalCustomerEmailInput.value = '';
-            if (modalCustomerPhoneInput) modalCustomerPhoneInput.value = '';
-        }
-    }
+    // A lógica de modalEmailPhoneFields foi removida daqui, pois o email para pagamentos online
+    // está sendo passado como "test@test.com" no backend por enquanto.
+    // Se precisar de input de email/telefone no frontend para pagamentos online,
+    // você precisará adicionar os campos e a lógica aqui.
 
     removeHighlightField('modal-payment-choice-section'); 
     removeHighlightField('modal-troco-value'); 
@@ -1245,6 +1338,7 @@ function validateOrder(shouldHighlight = true, checkPaymentMethod = true) {
             }
         }
 
+        // Validação para troco, só se aplica a "whatsapp-especie"
         if (selectedPayment && selectedPayment.value === 'whatsapp-especie' && modalTrocoValueInput?.value.trim() !== '') {
             const totalPedidoElement = document.getElementById("modal-total-price");
             let totalPedido = parseFloat(totalPedidoElement.innerText.replace('R$ ', '').replace(',', '.'));
@@ -1292,7 +1386,7 @@ async function confirmAllOrders() {
         errorMessage = "Por favor, preencha o endereço de entrega.";
         fieldToHighlightId = 'modal-delivery-address';
     } else {
-        const selectedPaymentRadio = document.querySelector('#cart-modal-content input[name="modal-payment"]:checked');
+        const selectedPaymentRadio = document.querySelector('input[name="modal-payment"]:checked');
         if (!selectedPaymentRadio) {
             errorMessage = "Por favor, selecione uma forma de pagamento.";
             fieldToHighlightId = 'modal-payment-choice-section';
@@ -1304,6 +1398,14 @@ async function confirmAllOrders() {
                 errorMessage = "O valor do troco não pode ser menor que o total do pedido.";
                 fieldToHighlightId = 'modal-troco-value';
             }
+        } else if (selectedPaymentRadio.value.startsWith('online-')) { // Bloqueia pagamento online aqui
+            errorMessage = "Para pagamentos online, utilize o botão 'Continuar para Pagamento Online'.";
+            fieldToHighlightId = 'modal-online-payment-btn'; // Destaca o botão correto
+            // Se for online, não prossegue com o WhatsApp
+            showCustomAlert(errorMessage, 'warning');
+            if (modalConfirmAllBtn) shakeButton(modalConfirmAllBtn);
+            if (fieldToHighlightId) highlightField(fieldToHighlightId);
+            return;
         }
     }
 
@@ -1326,17 +1428,22 @@ async function confirmAllOrders() {
         const product = getProductById(item.productId);
         if (product) {
             let itemPrice = product.price;
-            mensagem += `• ${product.name} - R$ ${product.price.toFixed(2).replace('.', ',')}\n`;
+            let itemDescription = product.name;
             
             if (item.complements && item.complements.length > 0) {
-                item.complements.forEach(complementId => {
+                const complementNames = item.complements.map(complementId => {
                     const comp = complements[complementId];
                     if (comp) {
                         itemPrice += comp.price;
-                        mensagem += `  + _${comp.name}_ \n`;
+                        return comp.name;
                     }
-                });
+                    return '';
+                }).filter(Boolean);
+                if (complementNames.length > 0) {
+                    itemDescription += ` (+ ${complementNames.join(', ')})`;
+                }
             }
+            mensagem += `• ${itemDescription} - R$ ${itemPrice.toFixed(2).replace('.', ',')}\n`;
             totalPedido += itemPrice;
         }
     });
@@ -1347,7 +1454,10 @@ async function confirmAllOrders() {
     }
 
     const selectedPaymentRadio = document.querySelector('input[name="modal-payment"]:checked');
-    const paymentMethod = selectedPaymentRadio.options[selectedPaymentRadio.selectedIndex].text;
+    // Pegar o texto do label associado ao rádio button
+    const paymentMethodLabel = document.querySelector(`label[data-method="${selectedPaymentRadio.value}"] div`).textContent;
+    const paymentMethod = paymentMethodLabel.includes('(WhatsApp)') ? paymentMethodLabel : `Pagamento via WhatsApp (${paymentMethodLabel})`; // Ajusta o texto para coerência
+
 
     mensagem += `\n*Tipo de Entrega:* ${deliveryType}\n`;
     if (deliveryType === 'Entrega') {
@@ -1357,7 +1467,7 @@ async function confirmAllOrders() {
     mensagem += `*Forma de Pagamento:* ${paymentMethod}\n`;
 
     const trocoValue = modalTrocoValueInput.value.trim();
-    if (paymentMethod === 'Dinheiro' && trocoValue) {
+    if (selectedPaymentRadio.value === 'whatsapp-especie' && trocoValue) {
         mensagem += `*Troco para:* R$ ${parseFloat(trocoValue).toFixed(2).replace('.', ',')}\n`;
     }
 
@@ -1379,8 +1489,8 @@ function clearCart() {
 
     if (modalCustomerNameInput) modalCustomerNameInput.value = '';
     if (modalDeliveryAddressInput) modalDeliveryAddressInput.value = '';
-    if (document.getElementById('modal-customer-email')) document.getElementById('modal-customer-email').value = '';
-    if (document.getElementById('modal-customer-phone')) document.getElementById('modal-customer-phone').value = '';
+    // if (document.getElementById('modal-customer-email')) document.getElementById('modal-customer-email').value = ''; // Removido
+    // if (document.getElementById('modal-customer-phone')) document.getElementById('modal-customer-phone').value = ''; // Removido
     if (modalTrocoValueInput) modalTrocoValueInput.value = '';
     
     if (modalDeliveryCheckbox) modalDeliveryCheckbox.checked = false;
@@ -1389,7 +1499,7 @@ function clearCart() {
 
     if (modalDeliveryAddressSection) modalDeliveryAddressSection.style.display = 'none';
     if (modalTrocoSection) modalTrocoSection.style.display = 'none';
-    if (modalEmailPhoneFields) modalEmailPhoneFields.style.display = 'none';
+    // if (modalEmailPhoneFields) modalEmailPhoneFields.style.display = 'none'; // Removido
 
     removeHighlightField('modal-customer-name');
     removeHighlightField('modal-delivery-options-wrapper');
@@ -1399,11 +1509,15 @@ function clearCart() {
     if (modalConfirmAllBtn) modalConfirmAllBtn.classList.remove('shake-animation');
 
     // Reseta a UI de pagamento online
-    document.querySelector('.modal-cart-actions').style.display = 'flex';
-    document.getElementById('payment-bricks-container').style.display = 'none';
+    const modalCartActions = document.querySelector('.modal-cart-actions');
+    if (modalCartActions) modalCartActions.style.display = 'flex';
+    const paymentBricksContainer = document.getElementById('payment-bricks-container');
+    if (paymentBricksContainer) paymentBricksContainer.style.display = 'none';
+    if (pixPaymentDetailsDiv) pixPaymentDetailsDiv.style.display = 'none'; // Esconde a seção Pix
+
     const payButton = document.getElementById('modal-online-payment-btn');
     if(payButton) {
-        payButton.textContent = 'Pagar Online (Pix ou Cartão)';
+        payButton.textContent = 'Continuar para Pagamento Online';
         payButton.disabled = false;
     }
     
