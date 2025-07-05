@@ -398,9 +398,8 @@ const pixQrCodeImage = document.getElementById('pixQrCodeImage');
 const pixCopiaEColaInput = document.getElementById('pixCopiaEColaInput');
 const copyPixCodeBtn = document.getElementById('copyPixCodeBtn');
 
-// Novos campos para nome e email do comprador online
+// Campos para e-mail do comprador online
 const modalBuyerInfoSection = document.getElementById('modal-buyer-info-section');
-// Removido: const modalBuyerNameInput = document.getElementById('modal-buyer-name');
 const modalBuyerEmailInput = document.getElementById('modal-buyer-email');
 
 
@@ -519,14 +518,57 @@ async function initiateOnlinePayment() {
             showCustomAlert("QR Code Pix gerado com sucesso!", "success");
 
         } else if (selectedOnlinePaymentMethod === 'online-card') {
-            console.log("Pagamento com Cartão online selecionado. NOTA: O backend precisa fornecer uma 'preferenceId' para o Brick de Cartão.");
+            console.log("Iniciando fluxo de Cartão online: solicitando preferenceId ao backend...");
             
-            showCustomAlert("O pagamento com Cartão Online está em desenvolvimento e requer configuração adicional no backend para usar os Bricks. Por favor, utilize o Pix Online ou as opções via WhatsApp.", "warning");
-            
-            // Reverte a visibilidade dos elementos se o fluxo não for implementado
-            if (onlinePaymentSection) onlinePaymentSection.style.display = 'block';
-            if (whatsappPaymentSection) whatsappPaymentSection.style.display = 'block';
-            if (modalBuyerInfoSection) modalBuyerInfoSection.style.display = 'block'; // Mostra a seção de dados do comprador
+            // 1. Chamar o NOVO ENDPOINT no backend para criar a preferência
+            // Este endpoint é o /create-mercadopago-preference
+            const preferenceResponse = await fetch(`${BACKEND_URL}/create-mercadopago-preference`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    items: cart.map(item => { // Envie os itens completos para a preferência
+                        const product = getProductById(item.productId);
+                        if (!product) return null;
+                        let itemTotal = product.price;
+                        const complementNames = item.complements.map(id => {
+                            const comp = complements[id];
+                            if (comp) {
+                                itemTotal += comp.price;
+                                return comp.name;
+                            }
+                            return '';
+                        }).filter(Boolean);
+                        return {
+                            title: product.name + (complementNames.length > 0 ? ` (${complementNames.join(', ')})` : ''),
+                            quantity: 1, 
+                            unit_price: parseFloat(itemTotal.toFixed(2))
+                        };
+                    }).filter(Boolean),
+                    customerName: customerName, // Usa o nome do campo geral do pedido
+                    customerEmail: buyerEmail, // Usa o email do campo de comprador online
+                    total: totalValue // Total calculado do carrinho
+                })
+            });
+
+            if (!preferenceResponse.ok) {
+                const errorData = await preferenceResponse.json();
+                console.error("Erro do backend ao criar preferência de cartão:", errorData);
+                throw new Error(`Falha ao criar preferência de cartão: ${errorData.message || preferenceResponse.statusText}`);
+            }
+
+            const preferenceData = await preferenceResponse.json();
+            const preferenceId = preferenceData.id;
+
+            if (!preferenceId) {
+                throw new Error("ID da preferência de pagamento com cartão não foi recebido do backend.");
+            }
+
+            // 2. Com o preferenceId, renderize o Brick de Cartão
+            console.log("Preferência ID recebida:", preferenceId, "Renderizando Brick de Cartão...");
+            await renderCardPaymentBrick(totalValue, preferenceId);
+            const paymentBricksContainer = document.getElementById('payment-bricks-container');
+            if (paymentBricksContainer) paymentBricksContainer.style.display = 'block'; // Mostra o container do Brick
+            showCustomAlert("Formulário de Cartão pronto para preenchimento.", "info");
 
         } else {
             // Este bloco não deve ser atingido se a validação acima funcionar
@@ -1316,7 +1358,6 @@ function selectPaymentMethod(method) {
     if (onlinePaymentSection) removeHighlightField('online-payment-section');
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value'); 
-    // Removido: removeHighlightField('modal-buyer-name');
     removeHighlightField('modal-buyer-email');
 
     updateTotal();
@@ -1490,7 +1531,6 @@ function clearCart() {
     if (onlinePaymentSection) removeHighlightField('online-payment-section');
     if (whatsappPaymentSection) removeHighlightField('whatsapp-payment-section');
     removeHighlightField('modal-troco-value');
-    // Removido: removeHighlightField('modal-buyer-name');
     removeHighlightField('modal-buyer-email');
     
     // Reseta o estado e visibilidade das seções de pagamento
