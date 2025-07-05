@@ -1,7 +1,7 @@
 // =========================================================
 // CONFIGURAÇÕES DO MERCADO PAGO
 // =========================================================
-const MERCADO_PAGO_PUBLIC_KEY = "APP_USR-29c92465-6af3-4415-afd9-cd41511d7f8e"; // <-- SUBSTITUA PELA SUA CHAVE PÚBLICA
+const MERCADO_PAGO_PUBLIC_KEY = "APP_USR-957728d5-1587-4142-8cf9-d689e9fb369a"; // <-- SUBSTITUA PELA SUA CHAVE PÚBLICA
 const BACKEND_URL = "https://apihook.onrender.com"; // <-- SUBSTITUA PELA URL DO SEU BACKEND NO RENDER
 
 // Inicializa o SDK do Mercado Pago
